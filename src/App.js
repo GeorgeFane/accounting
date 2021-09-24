@@ -1,14 +1,10 @@
 import React from "react";
-import axios from "axios";
 
-import { TextField, Box, Grid, Toolbar, Tooltip, Typography } from '@material-ui/core';
-import { DataGrid } from '@material-ui/data-grid';
+import { TextField, Box, Grid, Toolbar, Tooltip, Typography, Button } from '@mui/material';
 import { withStyles, createMuiTheme } from '@material-ui/core/styles';
 
 import Header from './Header';
-import MediaCard from './MediaCard';
-
-const { apikey } = require('./env.json');
+import BasicGrid from './BasicGrid';
 
 var colors = 'darkGreen darkGreen green goldenRod darkGoldenRod indianRed fireBrick fireBrick fireBrick fireBrick fireBrick'.split(' ');
 const useStyles = theme => {
@@ -19,37 +15,14 @@ const useStyles = theme => {
     return { root: root };
 };
 
-// api functions
-const url = 'https://www.omdbapi.com/';
-
-function search(s) {
-    const params = { apikey, s, type: 'series' };
-    return axios.get(url, { params })
-        .then(x => x.data.Search || []);
-}
-
-function getShow(i) {
-    const params = { apikey, i };
-    return axios.get(url, { params })
-        .then(x => x.data || []);
-}
-
-function getSeason(i, Season) {
-    const params = { apikey, i, Season };
-    return axios.get(url, { params });
-}
-
-function getAll(imdbID, totalSeasons) {
-    var requests = [];
-    for (var i = 0; i < totalSeasons; i++){
-        requests.push(
-            getSeason(imdbID, i + 1)
-        );
+function getKeys(key, value) {
+    // console.log(key, value);
+    if (!Object.keys(value).length) {
+        return key;
     }
-    return axios.all(requests)
-        .then(axios.spread( (...responses) => (
-            responses.map(response => response.data) 
-        )));
+    return Object.entries(value).map(([key1, value1]) => (
+        getKeys(key1, value1)
+    ));
 }
 
 class CommentForm extends React.Component {
@@ -57,150 +30,84 @@ class CommentForm extends React.Component {
         super(props);
 
         this.state = {
-            text: '',
-            rows: [],
-            show: {},
-            seasons: [],
+            count: 1,
+            forms: [],
+            accounts: {
+                Assets: {
+                    Cash: {},
+                    Inventory: {},
+                    PPE: {},
+                },
+                Liabilities: {
+                    AccountsPayable: {},
+                },
+                Equity: {
+                    ContributedCapital: {},
+                    RetainedEarnings: {
+                        Revenue: {},
+                        Expense: {},
+                        Dividend: {},
+                    },
+                },
+            },
         }
-
-        this.onChange = this.onChange.bind(this);
-        this.onSubmit = this.onSubmit.bind(this);
-        this.onClick = this.onClick.bind(this);
     }
     
     // hooks
 
-    setText = text => {
-        console.log(text);
-        this.setState({ text });
-    };
-
-    onChange(event) { 
-        event.preventDefault();     // prevents page from reloading on submit
-        const text = event.target.value;
-        console.log(text);
-        this.setState({ text });
-    }
-
-    async onSubmit(event) { 
-        event.preventDefault();     // prevents page from reloading on submit
-        const rows = await search(this.state.text);
-        const show = {};
-        this.setState({ rows, show });
-    }
-    
-    async onClick(imdbID) {
-        const show = await getShow(imdbID);
-        const rows = [];
-        this.setState({ show, rows });
-
-        const seasons = await getAll(
-            this.state.show.imdbID,
-            Number(this.state.show.totalSeasons),
-        )
-        this.setState({ seasons });     
+    handleSubmit = event => {
+        event.preventDefault();
+        console.log(event.target.elements);
     }
 
     // components
 
-    RatingsMap() {        
-        const { classes } = this.props;
-
-        const { seasons } = this.state;
-        if (!seasons.length) {
-            return;
-        }
-
-        const rows = seasons.map( (season, index) => {
-            var row = { id: index + 1 };
-            season.Episodes.forEach(episode => {
-                row[episode.Episode] = episode;
-            });
-            return row;
-        });
-        console.log(rows);
-
-        const epNumbers = rows.map(row => Object.keys(row));
-        const temp = Array.prototype.concat(...epNumbers);
-        const max = Math.max(...temp
-            .filter(n => n !== 'id')
-            .map(n => parseInt(n)));
-
-        const renderCell = params => (            
-            <Tooltip title={(
-                <Typography component='pre'>
-                    {JSON.stringify(params.value, null, 4)}
-                </Typography>
-            )}>
-                <Typography>
-                    {params.value ? params.value.imdbRating : null}
-                </Typography>
-            </Tooltip>
-        );
-        var columns = [{ 
-            field: 'id',
-            headerName: 'S\\E',
-        }]
-        for (var i = 0; i < max; i++){
-            columns.push({ field: i + 1, renderCell });
-        }
-        console.log(columns)
-
-        const getCellClassName = params => {
-            if (params.field !== 'id' && params.value) {
-                const int = parseInt(params.value.imdbRating);
-                return colors[10 - int];
-            }
-        }
-        const data = {
-            rows, columns, getCellClassName,
-            autoHeight: true,
-            className: classes.root,
-        }
-        return (
-            <div>
-                <Typography>
-                    *First row is the first season,
-                    second row is the second season, etc
-                </Typography>
-                <DataGrid {...data} />
-
-            </div>
-        );
-    }
-
     render() {
         const { classes } = this.props;
-        const { rows } = this.state;
-        console.log(rows)
+        var { accounts, count } = this.state;
+
+        const keys = getKeys('accounts', accounts);
+        const flat = keys.flat(3);
+        const forms = new Array(count).fill(0).map(() => (
+            <BasicGrid
+                flat={flat}
+            />
+        ));
 
         return (
             <div>
-                <Header
-                    text={this.state.text}
-                    onChange={this.onChange}
-                    onSubmit={this.onSubmit}
-                />
+                <Header />
                 <Toolbar />
 
-                <div className={classes.root}>
-                    <Grid container justify='left' spacing={2}>
-                        {rows
-                            .filter(tile => tile.Poster !== 'N/A')
-                            .map(tile => (
-                                <Grid item
-                                    onClick={() => this.onClick(tile.imdbID)}
-                                >
-                                    <MediaCard tile={tile} />
-                                </Grid>
-                            ))
-                        }
-                    </Grid>
+                <Button
+                    variant='contained'
+                    color='primary'
+                    onClick={() => {
+                        count++;
+                        this.setState({ count });
+                    }}
+                >
+                    Add Journal Entry
+                </Button>
+                
+                <form onSubmit={this.handleSubmit}>
+                    {forms}
+                    <Button
+                        type='submit'
+                        variant='contained'
+                        color='success'
+                    >
+                        Submit
+                    </Button>
+                </form>
 
-                    {this.RatingsMap()}
-                </div>
+                <Typography
+                    component='pre'
+                >
+                    {JSON.stringify(accounts, null, 4)}
+                </Typography>
+
             </div>
-            
         );
     }
 } // end CommentForm component
